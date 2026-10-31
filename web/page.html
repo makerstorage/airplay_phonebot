@@ -61,6 +61,7 @@
     <div class="row">
       <button id="start">Start</button>
       <button id="stop">Stop</button>
+      <button id="reset">New session</button>
       <span id="status"></span>
     </div>
   </div>
@@ -92,6 +93,7 @@
 
   $("start").onclick = () => post("/task", { task: $("task").value });
   $("stop").onclick = () => post("/stop");
+  $("reset").onclick = () => { post("/reset"); $("task").value = ""; };
   $("done").onclick = () => post("/done");
   $("send").onclick = () => { post("/answer", { text: $("answer").value }); $("answer").value = ""; };
   $("answer").onkeydown = (e) => { if (e.key === "Enter") $("send").click(); };
@@ -129,6 +131,7 @@
       const running = s.status === "running";
       $("start").disabled = running;
       $("stop").disabled = !running;
+      $("reset").disabled = running;
       $("status").textContent = `${s.mode === "human" ? "You tap" : "Machine taps"} · ${s.status}`;
 
       const key = JSON.stringify([s.intent, s.phone_size]);

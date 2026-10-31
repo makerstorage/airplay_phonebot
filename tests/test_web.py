@@ -74,6 +74,16 @@ def test_task_runs_agent_and_answers_question():
     assert state["steps"][-1] == {"kind": "done", "text": "go: yes", "t": state["steps"][-1]["t"]}
 
 
+def test_reset_clears_session_but_not_while_running():
+    session = Session("gcode")
+    client = TestClient(create_app(FakeCapture(), session, lambda: None))
+    session.status, session.task, session.steps = "running", "old task", [{"kind": "action", "text": "tap"}]
+    assert client.post("/reset").status_code == 409
+    session.status = "done"
+    assert client.post("/reset").status_code == 200
+    assert (session.status, session.task, session.steps) == ("idle", "", [])
+
+
 def test_done_refused_in_gcode_mode():
     client = TestClient(create_app(FakeCapture(), Session("gcode"), lambda: None))
     assert client.post("/done").status_code == 400

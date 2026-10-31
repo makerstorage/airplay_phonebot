@@ -17,7 +17,26 @@ class Machine:
 
             self._serial = serial.Serial(self.cfg.port, self.cfg.baud, timeout=30)
             self._serial.reset_input_buffer()
+            if not self.cfg.home_on_start and self.position() == (0.0, 0.0, 0.0):
+                # Without homing, the position only lives in the board (set by hand with G92)
+                self.close()
+                raise RuntimeError("Board reports X0 Y0 Z0: it was reset and the position is lost. "
+                                   "Set the stylus position by hand with G92 first.")
         self.send(self.gcode.setup())
+
+    def position(self) -> tuple[float, float, float]:
+        """Current X, Y, Z from M114."""
+        self._serial.write(b"M114\n")
+        pos = None
+        while True:
+            reply = self._serial.readline().decode(errors="replace").strip()
+            if not reply:
+                raise TimeoutError("No reply from machine for: M114")
+            if reply.startswith("X:"):
+                parts = dict(p.split(":") for p in reply.split()[:3])
+                pos = (float(parts["X"]), float(parts["Y"]), float(parts["Z"]))
+            elif reply.startswith("ok") and pos:
+                return pos
 
     def close(self) -> None:
         if self._serial:

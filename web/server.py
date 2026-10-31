@@ -71,6 +71,11 @@ class Session:
     def answer(self, text: str) -> None:
         self._answers.put(text)
 
+    def reset(self) -> None:
+        # Clean slate for the next task; each task already gets a fresh Agent
+        self.status, self.task, self.plan, self.steps = "idle", "", [], []
+        self.intent = self.question = None
+
     def state(self) -> dict:
         return {
             "mode": self.mode,
@@ -134,6 +139,13 @@ def create_app(
     @app.post("/answer")
     def answer(text: str = Body(embed=True)):
         session.answer(text)
+        return {"ok": True}
+
+    @app.post("/reset")
+    def reset():
+        if session.status == "running":
+            raise HTTPException(409, "Stop the task first")
+        session.reset()
         return {"ok": True}
 
     @app.post("/stop")

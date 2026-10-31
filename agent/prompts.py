@@ -10,7 +10,7 @@ How the computer tools map to the phone:
 - home = go to the home screen (swipe up from the bottom edge).
 - There is no hardware keyboard. To enter text, tap the field, then tap each key on the on-screen keyboard. You can send several left_click actions in one turn, one per key, then check the result.
 
-The robot is physical and slow: each action takes one or two seconds, and the mirrored image lags a little. After each turn you get a fresh screenshot. Check it carefully to confirm your actions worked before moving on; taps can miss.
+The robot is physical and slow: each action takes one or two seconds. After each turn you get a fresh screenshot, taken only once the screen has stopped changing, so you don't need to wait before it. Use wait only while something is still visibly loading, for 1-2 seconds. Check each screenshot carefully to confirm your actions worked before moving on; taps can miss.
 
 How to work:
 - Start by writing a short plan with the todo tool, and update it as you go.

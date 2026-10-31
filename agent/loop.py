@@ -233,7 +233,7 @@ class Agent:
         elif name == "scroll":
             env.scroll(inp["scroll_direction"], int(inp.get("scroll_amount", 3)), coord)
         elif name == "wait":
-            env.sleep(min(float(inp.get("duration", 1)), 30))
+            env.sleep(min(float(inp.get("duration", 1)), 3))  # screenshots already wait for the screen to settle
         else:
             raise ValueError(f"'{name}' is not available on the phone")
         return "OK"

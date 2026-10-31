@@ -13,11 +13,11 @@ robot:
   # just touching the glass (that point = Z0), followed by G92 Z0.3.
   z_up: 5.3                # 5 mm gap above the screen
   z_touch: 0.0             # presses 0.3 mm past first contact (tested 2026-10-31)
-  z_at_connect: 0.3        # G92 Z0.3 on connect: board reset happens with the stylus just touching
+  z_at_connect: null       # G92 Z on connect; null = keep the position the board already has
 
   # Speeds in mm/min
   move_speed: 3000         # X/Y travel with stylus up
-  z_speed: 300             # bed up/down (more risks skipped steps at 4388 steps/mm)
+  z_speed: 600             # bed up/down; 600 = firmware max (M203 Z10). Watch for skipped steps at 4388 steps/mm
   z_accel: 150             # mm/s^2, firmware default 50 makes taps too long
   swipe_speed: 1500        # X/Y travel with stylus down
   fast_swipe_speed: 6000   # quick flicks, e.g. the home gesture
@@ -51,7 +51,7 @@ agent:
   skills_dir: skills
 
 actuator:
-  mode: human              # human = you tap by hand from the web page, gcode = the machine taps
+  mode: gcode              # human = you tap by hand from the web page, gcode = the machine taps
 
 web:
   port: 8000               # control page: http://localhost:8000
