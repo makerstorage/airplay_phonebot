@@ -1,0 +1,54 @@
+robot:
+  dry_run: true            # true = print G-code only, no serial connection
+  port: /dev/tty.usbserial # serial port of the machine
+  baud: 115200
+  home_on_start: true      # send G28 when connecting
+
+  # Work area limits in mm (moves outside are refused)
+  x_max: 200
+  y_max: 200
+
+  # Z heights in mm
+  z_up: 5.0                # safe height above the screen
+  z_touch: 0.0             # stylus touches the screen
+
+  # Speeds in mm/min
+  move_speed: 3000         # X/Y travel with stylus up
+  z_speed: 1500            # stylus up/down
+  swipe_speed: 1500        # X/Y travel with stylus down
+  fast_swipe_speed: 6000   # quick flicks, e.g. the home gesture
+
+  tap_hold_ms: 80          # how long a tap stays on the screen
+  double_tap_lift: 1.0     # mm lift between the two taps of a double tap
+  dwell_in_seconds: false  # Marlin: G4 P is in ms
+
+vision:
+  window_owner: uxplay          # app that owns the AirPlay mirror window (UxPlay)
+  max_long_edge: 1280      # downscale target for the LLM image
+  phone_width: 1170        # iPhone 13 Pro screen resolution (for the crop aspect ratio)
+  phone_height: 2532
+
+calib:
+  port: 8765               # calibration page: http://<mac-ip>:8765
+  screen_box: [0, 0, 70, 150]  # rough phone screen area in machine mm [x0, y0, x1, y1] - measure on your machine
+  grid: 3                  # 3x3 = 9 taps
+  margin: 0.15             # keep taps away from the screen edges
+  settle_s: 1.0            # wait for the mirror to update after a tap
+  file: calib.json         # saved result
+
+agent:
+  model: claude-opus-5-5
+  effort: medium           # low | medium | high | xhigh | max
+  max_steps: 80            # model turns before the loop stops
+  settle_s: 0.6            # wait after an action before the screenshot (AirPlay lag)
+  stable_timeout_s: 3.0    # wait up to this long for animations to stop
+  clear_trigger_tokens: 80000  # start clearing old screenshots above this context size
+  keep_tool_uses: 12       # recent tool calls kept when clearing
+  skills_dir: skills
+
+actuator:
+  mode: human              # human = you tap by hand from the web page, gcode = the machine taps
+
+web:
+  port: 8000               # control page: http://localhost:8000
+  fps: 5                   # live phone picture frame rate

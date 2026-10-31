@@ -1,0 +1,66 @@
+I want to build an iPhone-controlling physical robot. There will be a stepper-motor-controlled stylus that will tap, swipe, or perform other actions physically on a real iPhone.
+The aim is to let an LLM control the phone. The user will give a complex task to an LLM. The LLM will reason, plan, and use the real phone to complete the task.
+For example, the user can say 'order me pizza'. The LLM will use the phone, open the app on the real phone with the help of the real motor-controlled device, and give the order.
+
+We need to have a see-think-act loop: a planner model writes the plan, and an actor model picks each step.
+
+See is to capture the screen image and give it to a vision model. In the first development stage, we will use iPhone AirPlay (the screen share option). Think will decide what to do, and in act, the LLM will decide to use a tool like tap with x,y coordinates.
+These coordinates can be transformed to the machine coordinates, and the machine will move to those coordinates, and the Z axis will perform a tap action.
+
+The machine will understand G-codes.
+
+Calibration:
+Mapping screen pixels to machine millimetres is the core problem. The mirrored image isn't the same size as the physical screen, and the phone may sit slightly rotated in its holder. A homography (a mapping between the two planes) found by tapping a few known points will handle this.
+
+No special app is needed on the iPhone. We will use a calibration web page opened in Safari on the phone (served from the Mac over the local network). The page draws a dot wherever the stylus taps.
+Calibration steps:
+1. Open the calibration page in Safari on the iPhone.
+2. The machine taps 4 or more known points (in machine coordinates).
+3. We find the dots in the AirPlay image (in screen pixels).
+4. From these point pairs we compute the homography and use it to convert every tap from screen pixels to machine coordinates.
+
+The phone stays fixed in its holder, so we calibrate once and save the result. Calibration is only redone if the phone is moved.
+
+Agent loop:
+One agent (Claude Opus 5.5) instead of a separate planner and actor. It writes its own short plan and updates it as it goes.
+Each step: screenshot -> think -> act -> screenshot to verify.
+Skills: small markdown files with app know-how (e.g. pizza_app.md, ios_basics.md), loaded only when needed.
+The agent asks the user before payments or anything that can't be undone.
+A max step limit stops the loop.
+
+Tools:
+We use Claude's computer use toolset and translate its actions to robot moves:
+- screenshot -> AirPlay frame
+- zoom -> crop of the AirPlay frame
+- left_click -> tap
+- double_click -> double tap
+- left_click_drag -> swipe
+- scroll -> short swipe
+- left_mouse_down + wait + left_mouse_up -> long press
+- wait -> wait
+Typing (v1): the type action is disabled; the agent taps each key on the iPhone keyboard itself (several taps per turn), then checks the screenshot.
+Unused actions (type, key, right_click, hold_key, etc.) are disabled.
+Extra tools: home, ask_user, load_skill, todo.
+Screenshots are downscaled before sending; coordinates are scaled back, then converted to machine coordinates with the calibration.
+
+Hardware:
+A G-code machine with Marlin firmware. Config: serial port, baud rate, Z up / Z touch height, move speed, tap speed.
+
+App:
+One Python app on the Mac controls everything:
+- Gets the iPhone screen from the macOS AirPlay Receiver window (needs Screen Recording permission).
+- Calls Claude Opus 5.5.
+- Converts taps to machine coordinates and sends G-code over USB serial.
+User interface: a small local web page showing the live phone screen, the task input, the agent's steps, and Confirm / Stop buttons.
+
+Project structure (Python):
+agent/      agent loop, Opus 5.5, tools
+skills/     app know-how markdown files
+vision/     AirPlay window capture, black border crop, downscaling
+calib/      Safari calibration page, homography, saved result
+robot/      G-code sender (tap, swipe, long press)
+web/        local web UI
+config.yaml
+
+v2:
+- Typing by speech: tap the mic on the iPhone keyboard and the Mac speaks the text. Key tapping stays as fallback (passwords, wrong text).

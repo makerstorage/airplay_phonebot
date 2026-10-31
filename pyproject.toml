@@ -1,0 +1,28 @@
+[project]
+name = "phonebot"
+version = "0.1.0"
+description = "LLM-controlled robot that taps a real iPhone"
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=2.3.0",
+    "fastapi>=0.162.0",
+    "numpy>=2.5.4",
+    "pillow>=13.0.0",
+    "pyobjc-framework-avfoundation>=13.0",
+    "pyobjc-framework-coremedia>=13.0",
+    "pyobjc-framework-coremediaio>=13.0",
+    "pyobjc-framework-libdispatch>=13.0",
+    "pyobjc-framework-quartz>=13.0",
+    "pyserial>=3.5",
+    "python-dotenv>=1.2.4",
+    "pyyaml>=6.0.3",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Phonebot calibration</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; overflow: hidden;
+               touch-action: none; -webkit-user-select: none; user-select: none; }
+  canvas { display: block; }
+  #info { position: fixed; top: 8px; left: 0; right: 0; text-align: center;
+          font: 14px -apple-system, sans-serif; color: #888; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="info">Phonebot calibration — keep this page open</div>
+<canvas id="c"></canvas>
+<script>
+  const c = document.getElementById("c");
+  const ctx = c.getContext("2d");
+  function resize() {
+    c.width = innerWidth * devicePixelRatio;
+    c.height = innerHeight * devicePixelRatio;
+    c.style.width = innerWidth + "px";
+    c.style.height = innerHeight + "px";
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  }
+  resize();
+  addEventListener("resize", resize);
+
+  c.addEventListener("touchstart", e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      ctx.fillStyle = "#ff0000";
+      ctx.beginPath();
+      ctx.arc(t.clientX, t.clientY, 10, 0, Math.PI * 2);
+      ctx.fill();
+      fetch("/touch", { method: "POST", body: JSON.stringify({ x: t.clientX, y: t.clientY }) });
+    }
+  }, { passive: false });
+</script>
+</body>
+</html>

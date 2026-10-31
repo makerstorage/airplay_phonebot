@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phonebot</title>
+<style>
+  :root { --bg: #111; --panel: #1c1c1e; --line: #333; --text: #eee; --dim: #999;
+          --accent: #ff3b30; --ok: #34c759; --warn: #ffcc00; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font: 14px -apple-system, BlinkMacSystemFont, sans-serif; }
+  body { display: flex; gap: 16px; padding: 16px; }
+
+  #phone { position: relative; height: calc(100vh - 32px); flex: none; }
+  #phone img { height: 100%; display: block; border-radius: 24px; background: #000; }
+  #phone svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  #side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; height: calc(100vh - 32px); }
+  .box { background: var(--panel); border-radius: 10px; padding: 12px; }
+  h2 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); }
+  textarea, input { width: 100%; background: #000; color: var(--text); border: 1px solid var(--line);
+                    border-radius: 8px; padding: 8px; font: inherit; }
+  textarea { height: 60px; resize: vertical; }
+  .row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  button { border: 0; border-radius: 8px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  #start { background: var(--ok); color: #000; }
+  #stop { background: var(--accent); color: #fff; }
+  #status { margin-left: auto; color: var(--dim); }
+
+  #act { border: 2px solid var(--warn); display: none; }
+  #act .what { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  #done { background: var(--warn); color: #000; font-size: 18px; padding: 12px 32px; }
+  #askbox { border: 2px solid #0a84ff; display: none; }
+  #askbox .q { font-size: 16px; margin-bottom: 8px; }
+  #send { background: #0a84ff; color: #fff; }
+
+  #plan ul { margin: 0; padding-left: 18px; }
+  #plan li.done { color: var(--dim); text-decoration: line-through; }
+  #plan li.in_progress { color: var(--warn); }
+  #steps { flex: 1; overflow-y: auto; min-height: 0; }
+  .step { padding: 4px 0; border-bottom: 1px solid var(--line); white-space: pre-wrap; word-break: break-word; }
+  .step .k { color: var(--dim); font-size: 11px; text-transform: uppercase; margin-right: 6px; }
+  .step.thinking { color: var(--dim); font-style: italic; }
+  .step.action { color: #64d2ff; }
+  .step.error { color: var(--accent); }
+  .step.done { color: var(--ok); }
+</style>
+</head>
+<body>
+<div id="phone">
+  <img src="/stream.mjpg" alt="iPhone screen">
+  <svg id="overlay"></svg>
+</div>
+
+<div id="side">
+  <div class="box">
+    <h2>Task</h2>
+    <textarea id="task" placeholder="e.g. Open Settings and turn on dark mode"></textarea>
+    <div class="row">
+      <button id="start">Start</button>
+      <button id="stop">Stop</button>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <div class="box" id="act">
+    <h2>Do this on the phone</h2>
+    <div class="what" id="what"></div>
+    <button id="done">Done</button>
+  </div>
+
+  <div class="box" id="askbox">
+    <h2>The agent asks</h2>
+    <div class="q" id="question"></div>
+    <div class="row">
+      <input id="answer" placeholder="Your answer">
+      <button id="send">Send</button>
+    </div>
+  </div>
+
+  <div class="box" id="plan"><h2>Plan</h2><ul></ul></div>
+  <div class="box" id="steps"><h2>Steps</h2><div id="log"></div></div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+                                           body: JSON.stringify(body || {}) });
+  let shownSteps = -1, shownIntent = "", shownQuestion = null;
+
+  $("start").onclick = () => post("/task", { task: $("task").value });
+  $("stop").onclick = () => post("/stop");
+  $("done").onclick = () => post("/done");
+  $("send").onclick = () => { post("/answer", { text: $("answer").value }); $("answer").value = ""; };
+  $("answer").onkeydown = (e) => { if (e.key === "Enter") $("send").click(); };
+  document.addEventListener("keydown", (e) => {
+    // Space = Done, so you can keep one hand on the phone
+    if (e.code === "Space" && $("act").style.display === "block" && document.activeElement.tagName !== "TEXTAREA"
+        && document.activeElement.tagName !== "INPUT") { e.preventDefault(); $("done").click(); }
+  });
+
+  function drawIntent(intent, size) {
+    const svg = $("overlay");
+    if (!intent || !size) { svg.innerHTML = ""; return; }
+    const [w, h] = size, r = w * 0.04, p = intent.points;
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    const ring = (x, y, rr, fill) =>
+      `<circle cx="${x}" cy="${y}" r="${rr}" fill="${fill || "none"}" stroke="#ff3b30" stroke-width="${r * 0.25}"/>`;
+    let s = `<defs><marker id="arr" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto">
+               <path d="M0,0 L10,5 L0,10 z" fill="#ff3b30"/></marker></defs>`;
+    if (intent.kind === "tap") s += ring(p[0][0], p[0][1], r);
+    if (intent.kind === "double_tap") s += ring(p[0][0], p[0][1], r) + ring(p[0][0], p[0][1], r * 1.6);
+    if (intent.kind === "press" || intent.kind === "drag") s += ring(p[0][0], p[0][1], r, "rgba(255,59,48,.4)");
+    if (intent.kind === "swipe")
+      s += ring(p[0][0], p[0][1], r * 0.6) +
+           `<line x1="${p[0][0]}" y1="${p[0][1]}" x2="${p[1][0]}" y2="${p[1][1]}" stroke="#ff3b30"
+                  stroke-width="${r * 0.3}" marker-end="url(#arr)"/>`;
+    svg.innerHTML = s;
+  }
+
+  function esc(t) { const d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+
+  async function tick() {
+    try {
+      const s = await (await fetch("/state")).json();
+      const running = s.status === "running";
+      $("start").disabled = running;
+      $("stop").disabled = !running;
+      $("status").textContent = `${s.mode === "human" ? "You tap" : "Machine taps"} · ${s.status}`;
+
+      const key = JSON.stringify([s.intent, s.phone_size]);
+      if (key !== shownIntent) {
+        shownIntent = key;
+        drawIntent(s.intent, s.phone_size);
+        $("act").style.display = s.intent && s.mode === "human" ? "block" : "none";
+        if (s.intent) $("what").textContent = s.intent.text;
+      }
+
+      if (s.question !== shownQuestion) {
+        shownQuestion = s.question;
+        $("askbox").style.display = s.question ? "block" : "none";
+        $("question").textContent = s.question || "";
+        if (s.question) $("answer").focus();
+      }
+
+      $("plan").querySelector("ul").innerHTML =
+        s.plan.map((i) => `<li class="${i.status}">${esc(i.text)}</li>`).join("");
+
+      if (s.steps.length !== shownSteps) {
+        shownSteps = s.steps.length;
+        const log = $("log"), box = $("steps");
+        const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+        log.innerHTML = s.steps.map((st) =>
+          `<div class="step ${st.kind}"><span class="k">${st.kind}</span>${esc(st.text)}</div>`).join("");
+        if (atBottom) box.scrollTop = box.scrollHeight;
+      }
+    } catch (e) { /* server restarting */ }
+    setTimeout(tick, 400);
+  }
+  tick();
+</script>
+</body>
+</html>
