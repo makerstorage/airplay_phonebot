@@ -37,4 +37,6 @@ def test_out_of_bounds_refused():
 def test_dry_run_logs_setup_with_home():
     m = Machine(RobotConfig(dry_run=True))
     m.connect()
-    assert m.log[:3] == ["G21", "G90", "G28 X0 Y0"]
+    assert m.log[:2] == ["G21", "G90"]
+    # The stylus lifts before homing so it never drags on the glass
+    assert m.log.index("G1 Z5.00 F1500") < m.log.index("G28 X0 Y0")

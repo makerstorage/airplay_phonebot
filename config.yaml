@@ -1,8 +1,8 @@
 robot:
-  dry_run: true            # true = print G-code only, no serial connection
+  dry_run: false           # true = print G-code only, no serial connection
   port: /dev/cu.usbmodem21101 # serial port of the machine
   baud: 115200
-  home_on_start: true      # send G28 X0 Y0 when connecting (Z is never homed)
+  home_on_start: false     # never home (user rule): position is set by hand with G92
 
   # Work area limits in mm (moves outside are refused)
   x_max: 200
@@ -13,6 +13,7 @@ robot:
   # just touching the glass (that point = Z0), followed by G92 Z0.3.
   z_up: 5.3                # 5 mm gap above the screen
   z_touch: 0.0             # presses 0.3 mm past first contact (tested 2026-10-31)
+  z_at_connect: 0.3        # G92 Z0.3 on connect: board reset happens with the stylus just touching
 
   # Speeds in mm/min
   move_speed: 3000         # X/Y travel with stylus up
@@ -33,7 +34,7 @@ vision:
 
 calib:
   port: 8765               # calibration page: http://<mac-ip>:8765
-  screen_box: [0, 0, 70, 150]  # rough phone screen area in machine mm [x0, y0, x1, y1] - measure on your machine
+  screen_box: [68, 46, 132, 185]  # rough phone screen area in machine mm [x0, y0, x1, y1] (2026-10-31, frame set by G92 X100 Y100)
   grid: 3                  # 3x3 = 9 taps
   margin: 0.15             # keep taps away from the screen edges
   settle_s: 1.0            # wait for the mirror to update after a tap
