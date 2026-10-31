@@ -37,4 +37,4 @@ def test_out_of_bounds_refused():
 def test_dry_run_logs_setup_with_home():
     m = Machine(RobotConfig(dry_run=True))
     m.connect()
-    assert m.log[:3] == ["G21", "G90", "G28"]
+    assert m.log[:3] == ["G21", "G90", "G28 X0 Y0"]

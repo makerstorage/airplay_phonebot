@@ -1,24 +1,27 @@
 robot:
   dry_run: true            # true = print G-code only, no serial connection
-  port: /dev/tty.usbserial # serial port of the machine
+  port: /dev/cu.usbmodem21101 # serial port of the machine
   baud: 115200
-  home_on_start: true      # send G28 when connecting
+  home_on_start: true      # send G28 X0 Y0 when connecting (Z is never homed)
 
   # Work area limits in mm (moves outside are refused)
   x_max: 200
   y_max: 200
 
-  # Z heights in mm
-  z_up: 5.0                # safe height above the screen
-  z_touch: 0.0             # stylus touches the screen
+  # Z heights in mm. Z moves the bed: bigger Z = bed lower, away from the stylus.
+  # Z is never homed, so these only hold if the board resets with the stylus
+  # just touching the glass (that point = Z0), followed by G92 Z0.3.
+  z_up: 5.3                # 5 mm gap above the screen
+  z_touch: 0.0             # presses 0.3 mm past first contact (tested 2026-10-31)
 
   # Speeds in mm/min
   move_speed: 3000         # X/Y travel with stylus up
-  z_speed: 1500            # stylus up/down
+  z_speed: 300             # bed up/down (more risks skipped steps at 4388 steps/mm)
+  z_accel: 150             # mm/s^2, firmware default 50 makes taps too long
   swipe_speed: 1500        # X/Y travel with stylus down
   fast_swipe_speed: 6000   # quick flicks, e.g. the home gesture
 
-  tap_hold_ms: 80          # how long a tap stays on the screen
+  tap_hold_ms: 0           # no dwell: the 0.3 mm press + Z travel is enough (tested)
   double_tap_lift: 1.0     # mm lift between the two taps of a double tap
   dwell_in_seconds: false  # Marlin: G4 P is in ms
 

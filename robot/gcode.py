@@ -10,7 +10,9 @@ class GcodeBuilder:
     def setup(self) -> list[str]:
         lines = ["G21", "G90"]  # mm, absolute positioning
         if self.cfg.home_on_start:
-            lines.append("G28")
+            lines.append("G28 X0 Y0")  # never home Z: it drives the bed into the stylus
+        if self.cfg.z_accel:
+            lines.append(f"M201 Z{self.cfg.z_accel:.0f}")
         lines += self.pen_up()
         return lines
 

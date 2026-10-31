@@ -16,6 +16,7 @@ class RobotConfig:
     z_touch: float = 0.0
     move_speed: float = 3000
     z_speed: float = 1500
+    z_accel: float | None = None  # mm/s^2, sent as M201 Z on connect
     swipe_speed: float = 1500
     fast_swipe_speed: float = 6000
     tap_hold_ms: int = 80
