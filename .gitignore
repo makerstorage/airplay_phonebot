@@ -10,3 +10,4 @@ wheels/
 .venv
 frames/
 .env
+recordings/

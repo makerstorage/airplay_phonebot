@@ -74,12 +74,13 @@ def main() -> None:
 
     machine = Machine(robot_cfg)
     if load_actuator_mode() == "human":
-        def show(intent):
-            if intent:
-                points = ", ".join(f"({x:.0f}, {y:.0f})" for x, y in intent.points)
-                input(f"\n  DO: {intent.text} {points} (phone pixels), then press Enter ")
-                actuator.done()
-        actuator = HumanActuator(show)
+        def show(prompt):
+            if prompt:
+                w, h = frame.phone.size
+                points = ", ".join(f"({x * w:.0f}, {y * h:.0f})" for x, y in prompt.gesture.points_norm)
+                input(f"\n  DO: {prompt.say} {points} (phone pixels), then press Enter ")
+                actuator.answer(prompt.prompt_id, "done")
+        actuator = HumanActuator(lambda: frame.phone.size, on_prompt=show)
     else:
         machine.connect()
         actuator = GcodeActuator(machine, calib)

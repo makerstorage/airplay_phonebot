@@ -1,14 +1,6 @@
-"""What the agent wants done on the phone, in phone pixels."""
+"""What the agent's PhoneEnv calls on an actuator, in phone pixels."""
 
-from dataclasses import dataclass, field
 from typing import Protocol
-
-
-@dataclass
-class Intent:
-    kind: str                                    # tap | double_tap | swipe | press | drag | release
-    points: list[tuple[float, float]] = field(default_factory=list)  # phone pixels
-    text: str = ""                               # instruction for a person doing it by hand
 
 
 class Actuator(Protocol):

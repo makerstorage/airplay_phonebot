@@ -1,3 +1,4 @@
+import pytest
 import threading
 import time
 
@@ -5,7 +6,8 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from actuator import HumanActuator
-from vision import Frame
+from contract import Gesture
+from vision import Frame, FrameFeed
 from web.server import Session, create_app
 
 
@@ -22,28 +24,36 @@ def wait_for(cond, timeout=2.0):
 
 
 def test_human_tap_waits_for_done():
-    session = Session("human")
-    human = HumanActuator(session.show_intent, session.stop)
-    t = threading.Thread(target=human.tap, args=(100, 200))
+    human = HumanActuator(lambda: (1170, 2532))
+    human.seen()
+    t = threading.Thread(target=human.tap, args=(117, 253.2), daemon=True)
     t.start()
-    wait_for(lambda: session.intent is not None)
-    assert session.state()["intent"] == {"kind": "tap", "points": [(100, 200)], "text": "Tap here"}
+    wait_for(lambda: human.prompt is not None)
+    assert human.prompt.say == "Tap here"
+    assert human.prompt.gesture.points_norm[0] == pytest.approx((0.1, 0.1))
     assert t.is_alive()
-    human.done()
+    assert human.done()
     t.join(1)
-    assert not t.is_alive() and session.intent is None
+    assert not t.is_alive() and human.prompt is None
 
 
 def test_stop_unblocks_human_move():
-    session = Session("human")
-    human = HumanActuator(session.show_intent, session.stop)
+    stop = threading.Event()
+    human = HumanActuator(lambda: (100, 100), stop=stop)
+    human.seen()
     errors = []
-    t = threading.Thread(target=lambda: errors.append(_raises(lambda: human.swipe(0, 0, 10, 10))))
+    t = threading.Thread(target=lambda: errors.append(_raises(lambda: human.swipe(0, 0, 10, 10))), daemon=True)
     t.start()
-    wait_for(lambda: session.intent is not None)
-    session.stop.set()
+    wait_for(lambda: human.prompt is not None)
+    stop.set()
     t.join(1)
-    assert errors == [True] and session.intent is None
+    assert errors == [True] and human.prompt is None
+
+
+def test_human_without_page_is_unavailable():
+    human = HumanActuator(lambda: (100, 100))
+    r = human.execute(Gesture("tap", ((0.5, 0.5),)))
+    assert (r.ok, r.error) == (False, "device_unavailable")
 
 
 def _raises(fn):
@@ -63,7 +73,7 @@ def test_task_runs_agent_and_answers_question():
             answer = session.ask("Sure?")
             session.on_event("done", {"text": f"{task}: {answer}"})
 
-    client = TestClient(create_app(FakeCapture(), session, FakeAgent))
+    client = TestClient(create_app(FrameFeed(FakeCapture()), session, FakeAgent))
     assert client.post("/task", json={"task": "go"}).status_code == 200
     wait_for(lambda: session.question == "Sure?")
     assert client.post("/task", json={"task": "again"}).status_code == 409
@@ -76,7 +86,7 @@ def test_task_runs_agent_and_answers_question():
 
 def test_reset_clears_session_but_not_while_running():
     session = Session("gcode")
-    client = TestClient(create_app(FakeCapture(), session, lambda: None))
+    client = TestClient(create_app(FrameFeed(FakeCapture()), session, lambda: None))
     session.status, session.task, session.steps = "running", "old task", [{"kind": "action", "text": "tap"}]
     assert client.post("/reset").status_code == 409
     session.status = "done"
@@ -84,6 +94,6 @@ def test_reset_clears_session_but_not_while_running():
     assert (session.status, session.task, session.steps) == ("idle", "", [])
 
 
-def test_done_refused_in_gcode_mode():
-    client = TestClient(create_app(FakeCapture(), Session("gcode"), lambda: None))
+def test_done_refused_without_open_move():
+    client = TestClient(create_app(FrameFeed(FakeCapture()), Session("gcode"), lambda: None))
     assert client.post("/done").status_code == 400

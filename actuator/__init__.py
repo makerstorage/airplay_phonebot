@@ -1,6 +1,6 @@
-from actuator.base import Actuator, Intent
+from actuator.base import Actuator
 from actuator.config import load_actuator_mode
 from actuator.gcode import GcodeActuator
-from actuator.human import HumanActuator
+from actuator.human import HumanActuator, HumanPrompt
 
-__all__ = ["Actuator", "Intent", "GcodeActuator", "HumanActuator", "load_actuator_mode"]
+__all__ = ["Actuator", "GcodeActuator", "HumanActuator", "HumanPrompt", "load_actuator_mode"]

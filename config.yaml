@@ -56,3 +56,17 @@ actuator:
 web:
   port: 8000               # control page: http://localhost:8000
   fps: 5                   # live phone picture frame rate
+
+teach:
+  recordings_dir: recordings    # one folder per teaching session
+  skills_dir: skills            # approved skills: skills/<app_id>/SKILL.md (the agent loads them)
+  device_profile: iphone-13-pro # written into each recording
+  os: ios
+  prompt_timeout_s: null        # null = a "do this" prompt waits forever while teaching
+  settle_quiet_s: 0.6           # screen still this long = settled
+  settle_most_s: 4.0            # stop waiting for a still screen after this long
+  change_threshold: 2.0         # grey-level difference that counts as a screen change (inferred steps)
+  skill_writer:
+    model: claude-opus-5-5
+    effort: high
+    max_frames: 60              # frames sent per recording; each step's before/after first
