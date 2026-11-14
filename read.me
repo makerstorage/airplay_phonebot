@@ -15,11 +15,12 @@ Mapping screen pixels to machine millimetres is the core problem. The mirrored i
 No special app is needed on the iPhone. We will use a calibration web page opened in Safari on the phone (served from the Mac over the local network). The page draws a dot wherever the stylus taps.
 Calibration steps:
 1. Open the calibration page in Safari on the iPhone.
-2. The machine taps 4 or more known points (in machine coordinates).
-3. We find the dots in the AirPlay image (in screen pixels).
-4. From these point pairs we compute the homography and use it to convert every tap from screen pixels to machine coordinates.
+2. The machine taps around the work area until a tap lands on the page (it finds the screen itself).
+3. Two more taps next to the first hit give the direction and the scale.
+4. The page draws 3x3 targets over the screen. The machine aims at them nearest first; each dot is read from the AirPlay image and corrects the map before the next move. Missed targets are tried again, wrongly read dots are dropped.
+5. From these point pairs we compute the homography and use it to convert every tap from screen pixels to machine coordinates.
 
-The phone stays fixed in its holder, so we calibrate once and save the result. Calibration is only redone if the phone is moved.
+The phone is not in a fixed holder, so calibration is redone whenever the phone has moved (Calibrate button on the control page). It takes about 21 taps. It ends with a check round: every target is tapped once more with the final map, the control page draws the result and asks if it is OK before saving.
 
 Agent loop:
 One agent (Claude Opus 5.5) instead of a separate planner and actor. It writes its own short plan and updates it as it goes.

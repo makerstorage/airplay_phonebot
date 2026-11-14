@@ -138,6 +138,30 @@
 
   <!-- Agent tab -->
   <div id="agent-tab">
+    <div class="box hidden" id="machine" style="margin-bottom:12px">
+      <h2>Machine <span id="m-name" class="dim"></span></h2>
+      <div id="m-state"></div>
+      <div class="row">
+        <button id="m-home">Home X/Y</button>
+        <button id="m-calib" class="blue">Calibrate</button>
+      </div>
+      <div class="hint" id="m-msg"></div>
+      <pre class="hint hidden" id="m-log" style="max-height:140px;overflow:auto;margin:6px 0 0;white-space:pre-wrap"></pre>
+      <div class="row hidden" id="m-check" style="align-items:flex-start">
+        <div id="m-draw" style="flex:none"></div>
+        <div>
+          <div class="hint" id="m-legend"></div>
+          <div class="row hidden" id="m-ask">
+            <button id="m-ok" class="blue">OK, save it</button>
+            <button id="m-no">Not OK</button>
+          </div>
+        </div>
+      </div>
+      <div class="row" style="align-items:center">
+        <img id="m-qr" alt="QR code of the calibration page" width="120" height="120" style="border-radius:6px;flex:none">
+        <div class="hint" id="m-hint"></div>
+      </div>
+    </div>
     <div class="box">
       <h2>Task</h2>
       <textarea id="task" placeholder="e.g. Open Settings and turn on dark mode"></textarea>
@@ -375,9 +399,61 @@
   $("send").onclick = () => { post("/answer", { text: $("answer").value }); $("answer").value = ""; };
   $("answer").onkeydown = (e) => { if (e.key === "Enter") $("send").click(); };
 
+  $("m-home").onclick = () => post("/machine/home").catch((e) => flash(e.message));
+  $("m-calib").onclick = () => post("/machine/calibrate").catch((e) => flash(e.message));
+  $("m-ok").onclick = () => post("/machine/accept").catch((e) => flash(e.message));
+  $("m-no").onclick = () => post("/machine/reject").catch((e) => flash(e.message));
+
+  // The check round as a picture of the phone screen: ring = target, dot = where the stylus landed
+  let shownCheck = "";
+  function renderCheck(m) {
+    const key = JSON.stringify(m.check);
+    show("m-check", !!m.check);
+    show("m-ask", m.pending && !m.job);
+    if (!m.check || key === shownCheck) return;
+    shownCheck = key;
+    const [w, h] = m.check.size, r = w * 0.035, col = { hit: "#1fa34a", off: "#e08a00" };
+    let svg = `<svg viewBox="0 0 ${w} ${h}" width="150" style="background:#fff;border:2px solid #888;border-radius:14px">`;
+    for (const t of m.check.targets) {
+      const c = col[t.state] || "#d33", [x, y] = t.px;
+      svg += `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${c}" stroke-width="${w * 0.008}"/>`;
+      if (t.dot) svg += `<circle cx="${t.dot[0]}" cy="${t.dot[1]}" r="${r * 0.4}" fill="${c}"/>`;
+      const label = t.err_mm != null ? t.err_mm.toFixed(1) + " mm" : (t.state === "outside" ? "outside" : "no touch");
+      svg += `<text x="${x}" y="${y + r * 2.4}" text-anchor="middle" font-size="${w * 0.06}" fill="${c}">${label}</text>`;
+    }
+    $("m-draw").innerHTML = svg + "</svg>";
+    const errs = m.check.targets.filter((t) => t.err_mm != null).map((t) => t.err_mm);
+    const good = errs.filter((e) => e <= m.check.ok_mm).length;
+    $("m-legend").textContent = `Check round: ${good} of ${m.check.targets.length} dots within ${m.check.ok_mm} mm of ` +
+      `their target${errs.length ? `, worst ${Math.max(...errs).toFixed(1)} mm` : ""}. ` +
+      "Ring = target, dot = where the stylus landed. Green = good, orange = off, red = no touch.";
+  }
+
+  function renderMachine(m, running) {
+    show("machine", !!m);
+    if (!m) return;
+    $("m-name").textContent = m.name;
+    const cal = m.calibrated ? `calibrated (fit ${m.error_mm.toFixed(2)} mm)` : "not calibrated";
+    $("m-state").textContent = `${m.homed ? "homed" : "not homed"} · ${cal}`;
+    $("m-home").disabled = running || !!m.job;
+    $("m-calib").disabled = running || !!m.job;
+    $("m-msg").textContent = m.message;
+    show("m-log", m.log.length > 0);
+    const logText = m.log.join("\n");
+    if ($("m-log").textContent !== logText) { $("m-log").textContent = logText; $("m-log").scrollTop = 1e6; }
+    renderCheck(m);
+    if (!$("m-qr").getAttribute("src")) $("m-qr").src = "/machine/qr.svg";
+    $("m-hint").textContent = `To calibrate: scan this code with the iPhone camera before the phone goes into ` +
+      `the machine (or open ${m.calib_url} in Safari), then press Calibrate. ` +
+      "Calibrate homes X/Y first. Calibrate again whenever the phone has moved; home again after every restart.";
+  }
+
   function renderAgent(s) {
     const running = s.status === "running";
-    $("start").disabled = running; $("stop").disabled = !running; $("reset").disabled = running;
+    renderMachine(s.machine, running);
+    if (s.machine) $("stop").disabled = !running && s.machine.job !== "calibrate";
+    $("start").disabled = running; $("reset").disabled = running;
+    if (!s.machine) $("stop").disabled = !running;
     if (s.question !== shownQuestion) {
       shownQuestion = s.question;
       show("askbox", !!s.question);

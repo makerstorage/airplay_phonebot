@@ -1,6 +1,7 @@
 """Control page: live phone screen, the agent (task / plan / steps / ask / stop) and teaching
 (record a task done by hand, turn it into a skill)."""
 
+import io
 import queue
 import threading
 import time
@@ -14,6 +15,7 @@ from actuator import HumanActuator
 from agent import Agent
 from teach import TeachController, TeachError
 from vision.feed import FrameFeed
+from web.machine import MachineControl
 
 PAGE = (Path(__file__).parent / "page.html").read_text()
 MAX_STEPS_SHOWN = 300
@@ -94,9 +96,11 @@ def create_app(
     human: HumanActuator | None = None,
     teach: TeachController | None = None,
     fps: float = 5,
+    bot: MachineControl | None = None,
 ) -> FastAPI:
     """new_agent builds a fresh Agent per task. human shows moves for a person to do (the agent in human mode,
-    and teaching). teach is the teaching controller (None = no Teach tab)."""
+    and teaching). teach is the teaching controller (None = no Teach tab). bot is the machine's Home and
+    Calibrate buttons (None = no machine)."""
     app = FastAPI()
 
     @app.exception_handler(TeachError)
@@ -126,7 +130,36 @@ def create_app(
             "prompt": human.prompt.to_dict() if human and human.prompt else None,
             "screen": {"health": feed.health().__dict__, "size": frame.size if frame else None},
             "teach": teach.state() if teach else None,
+            "machine": bot.state() if bot else None,
         }
+
+    # Machine
+
+    @app.post("/machine/{job}")
+    def machine_job(job: str):
+        if bot is None or job not in ("home", "calibrate", "accept", "reject"):
+            raise HTTPException(404, "No such machine job")
+        if session.status == "running":
+            raise HTTPException(409, "Stop the task first")
+        try:
+            if job in ("accept", "reject"):  # the answer to "Is it OK?" after a calibration
+                bot.answer(job == "accept")
+            else:
+                bot.start(job)
+        except RuntimeError as err:
+            raise HTTPException(409, str(err))
+        return {"ok": True}
+
+    @app.get("/machine/qr.svg")
+    def machine_qr():
+        # The calibration page address as a QR code: scan it with the iPhone before it goes into the machine
+        if bot is None or not bot.calib_url:
+            raise HTTPException(404, "No calibration page")
+        import segno
+
+        buf = io.BytesIO()
+        segno.make(bot.calib_url, error="m").save(buf, kind="svg", scale=4, border=2, light="white")
+        return Response(buf.getvalue(), media_type="image/svg+xml")
 
     # Agent
 
@@ -138,6 +171,12 @@ def create_app(
             raise HTTPException(409, "A teaching session is open; finish it first")
         if not task.strip():
             raise HTTPException(400, "Empty task")
+        if bot:
+            m = bot.state()
+            if m["job"]:
+                raise HTTPException(409, f"The machine is busy ({m['job']})")
+            if not m["homed"] or not m["calibrated"]:
+                raise HTTPException(409, "Home and calibrate the machine first")
         session.task, session.plan, session.steps = task.strip(), [], []
         session.status = "running"
         session.stop.clear()
@@ -167,6 +206,8 @@ def create_app(
     @app.post("/stop")
     def stop():
         session.stop.set()
+        if bot:
+            bot.stop.set()  # ends a running calibration after the current tap
         if human and session.status == "running":
             human.stop()
         return {"ok": True}

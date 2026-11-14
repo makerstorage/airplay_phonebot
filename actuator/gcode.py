@@ -5,7 +5,8 @@ from robot import Machine
 
 
 class GcodeActuator:
-    def __init__(self, machine: Machine, calib: Calibration):
+    def __init__(self, machine: Machine, calib: Calibration | None):
+        """calib None = not calibrated yet: every move is refused until `calib` is set."""
         self.machine = machine
         self.calib = calib
 
@@ -29,4 +30,6 @@ class GcodeActuator:
         self.machine.release()
 
     def _mm(self, x: float, y: float) -> tuple[float, float]:
+        if self.calib is None:
+            raise RuntimeError("The machine is not calibrated. Calibrate it first (control page).")
         return self.calib.to_machine(x, y)

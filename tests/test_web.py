@@ -97,3 +97,50 @@ def test_reset_clears_session_but_not_while_running():
 def test_done_refused_without_open_move():
     client = TestClient(create_app(FrameFeed(FakeCapture()), Session("gcode"), lambda: None))
     assert client.post("/done").status_code == 400
+
+
+def test_machine_buttons_home_then_calibrate(tmp_path):
+    from actuator import GcodeActuator
+    from calib import Calibration
+    from calib.run import CalibConfig
+    from robot import Machine, RobotConfig
+    from web.machine import MachineControl
+
+    class Wire(Machine):
+        def send(self, lines):
+            self.log += lines
+
+    machine = Wire(RobotConfig(name="m", dry_run=False, home_by_order=True, z_mode="cam"))
+    actuator = GcodeActuator(machine, None)
+    bot = MachineControl(machine, actuator, CalibConfig(file=str(tmp_path / "c.json")), lambda: None, lambda: 0,
+                         "http://192.168.1.5:8765")
+    done = Calibration.from_box(100, 200, [10, 10, 70, 150])
+    bot._calibrate = lambda: setattr(actuator, "calib", done)
+    session = Session("gcode")
+    client = TestClient(create_app(FrameFeed(FakeCapture()), session, lambda: None, bot=bot))
+
+    assert client.get("/state").json()["machine"]["homed"] is False
+    qr = client.get("/machine/qr.svg")
+    assert qr.status_code == 200 and qr.text.lstrip().startswith("<?xml") and "<svg" in qr.text
+    assert client.post("/task", json={"task": "go"}).status_code == 409      # not homed, not calibrated
+    with pytest.raises(RuntimeError, match="not calibrated"):
+        actuator.tap(5, 5)
+    assert client.post("/machine/home").status_code == 200
+    wait_for(lambda: bot.job is None)
+    assert machine.log == ["G28 X Y R0", "M400"]
+    assert client.post("/machine/calibrate").status_code == 200
+    wait_for(lambda: bot.job is None)
+    m = client.get("/state").json()["machine"]
+    assert (m["homed"], m["calibrated"], m["screen_box"]) == (True, True, [10, 10, 70, 150])
+    # A finished calibration waits for the user's answer before it is saved and used
+    assert client.post("/machine/accept").status_code == 409                 # nothing is waiting
+    new = Calibration.from_box(100, 200, [20, 20, 80, 160])
+    bot.pending = new
+    assert client.get("/state").json()["machine"]["pending"] is True
+    assert client.post("/machine/reject").status_code == 200
+    assert actuator.calib is done and not (tmp_path / "c.json").exists()
+    bot.pending = new
+    assert client.post("/machine/accept").status_code == 200
+    assert actuator.calib is new and (tmp_path / "c.json").exists()
+    session.status = "running"
+    assert client.post("/machine/home").status_code == 409                   # not while the agent runs

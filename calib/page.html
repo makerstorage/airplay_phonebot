@@ -16,28 +16,89 @@
 <div id="info">Phonebot calibration — keep this page open</div>
 <canvas id="c"></canvas>
 <script>
+  // The page reports every touch (in page pixels) to the Mac and draws what the Mac sends (the "view").
+  // Colours the Mac looks for in the mirror image: pure red = the LAST touch, pure blue = corner marks.
+  // Everything else must stay clearly different from those two.
+  const BUILD = "__BUILD__";
   const c = document.getElementById("c");
   const ctx = c.getContext("2d");
+  let view = {};     // {round, title, targets: [{x, y, state, err_mm}], marks: [[x, y]], ruler: {o, x, y}}
+  let dots = [];     // touches of this round, page pixels; the last one is drawn red
+
   function resize() {
     c.width = innerWidth * devicePixelRatio;
     c.height = innerHeight * devicePixelRatio;
     c.style.width = innerWidth + "px";
     c.style.height = innerHeight + "px";
     ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    draw();
   }
+
+  const RING = { todo: "#b8b8b8", hit: "#1fa34a", off: "#e08a00", miss: "#7a4bd6", missed: "#7a4bd6", outside: "#d0d0d0" };
+
+  function drawRuler(r) {
+    // The machine's X and Y axes as the phone sees them, one tick every 10 mm
+    ctx.strokeStyle = ctx.fillStyle = "#9aa0a6";
+    ctx.lineWidth = 1;
+    ctx.font = "11px -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    for (const [name, v] of [["X", r.x], ["Y", r.y]]) {
+      const len = Math.hypot(v[0], v[1]), n = [-v[1] / len, v[0] / len];
+      ctx.beginPath(); ctx.moveTo(r.o[0], r.o[1]); ctx.lineTo(r.o[0] + v[0] * 4, r.o[1] + v[1] * 4); ctx.stroke();
+      for (let i = 1; i <= 4; i++) {
+        const x = r.o[0] + v[0] * i, y = r.o[1] + v[1] * i;
+        ctx.beginPath(); ctx.moveTo(x - n[0] * 5, y - n[1] * 5); ctx.lineTo(x + n[0] * 5, y + n[1] * 5); ctx.stroke();
+      }
+      ctx.fillText(`+${name} 40 mm`, r.o[0] + v[0] * 4.6, r.o[1] + v[1] * 4.6 + 4);
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    if (view.ruler) drawRuler(view.ruler);
+    for (const t of view.targets || []) {
+      ctx.strokeStyle = RING[t.state] || RING.todo;
+      ctx.lineWidth = t.state === "todo" ? 1.5 : 3;
+      ctx.beginPath(); ctx.arc(t.x, t.y, 22, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(t.x - 30, t.y); ctx.lineTo(t.x + 30, t.y);
+      ctx.moveTo(t.x, t.y - 30); ctx.lineTo(t.x, t.y + 30); ctx.lineWidth = 1; ctx.stroke();
+      if (t.err_mm != null) {
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.font = "12px -apple-system, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(t.err_mm.toFixed(1) + " mm", t.x, t.y + 46);
+      }
+    }
+    ctx.fillStyle = "#0000ff";
+    for (const [x, y] of view.marks || []) ctx.fillRect(x - 14, y - 14, 28, 28);
+    dots.forEach((d, i) => {
+      ctx.fillStyle = i === dots.length - 1 ? "#ff0000" : "#2a6df4";
+      ctx.beginPath(); ctx.arc(d.x, d.y, i === dots.length - 1 ? 10 : 5, 0, Math.PI * 2); ctx.fill();
+    });
+    document.getElementById("info").textContent = view.title || "Phonebot calibration — keep this page open";
+  }
+
+  function setView(v) {
+    if (v.build && v.build !== BUILD) { location.reload(); return; }  // the Mac has a newer page
+    if (v.round !== view.round) dots = [];  // a new round starts on a clean page
+    view = v;
+    draw();
+  }
+
   resize();
   addEventListener("resize", resize);
 
   c.addEventListener("touchstart", e => {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      ctx.fillStyle = "#ff0000";
-      ctx.beginPath();
-      ctx.arc(t.clientX, t.clientY, 10, 0, Math.PI * 2);
-      ctx.fill();
-      fetch("/touch", { method: "POST", body: JSON.stringify({ x: t.clientX, y: t.clientY }) });
+      dots.push({ x: t.clientX, y: t.clientY });
+      draw();
+      fetch("/touch", { method: "POST", body: JSON.stringify({ x: t.clientX, y: t.clientY }) })
+        .then(r => r.json()).then(setView).catch(() => {});
     }
   }, { passive: false });
+
+  setInterval(() => fetch(`/view?w=${innerWidth}&h=${innerHeight}`).then(r => r.json()).then(setView).catch(() => {}), 500);
 </script>
 </body>
 </html>

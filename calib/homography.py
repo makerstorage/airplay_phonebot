@@ -32,6 +32,16 @@ def fit_homography(src: list, dst: list) -> np.ndarray:
     return h / h[2, 2]
 
 
+def fit_affine(src: list, dst: list) -> np.ndarray:
+    """Least-squares affine map src -> dst (3+ pairs), as a 3x3 matrix. A flat phone and its mirror
+    image differ only by turn, scale and shift, so this is steadier than a full homography."""
+    src, dst = np.asarray(src, float), np.asarray(dst, float)
+    if len(src) < 3 or len(src) != len(dst):
+        raise ValueError("Need 3 or more matching point pairs")
+    m, *_ = np.linalg.lstsq(np.c_[src, np.ones(len(src))], dst, rcond=None)
+    return np.vstack([m.T, [0.0, 0.0, 1.0]])
+
+
 def apply_homography(h: np.ndarray, x: float, y: float) -> tuple[float, float]:
     u, v, w = h @ np.array([x, y, 1.0])
     return u / w, v / w
@@ -40,24 +50,31 @@ def apply_homography(h: np.ndarray, x: float, y: float) -> tuple[float, float]:
 class Calibration:
     """Saved mapping: phone pixel -> machine mm."""
 
-    def __init__(self, h: np.ndarray, error_mm: float = 0.0):
+    def __init__(self, h: np.ndarray, error_mm: float = 0.0, screen_box: list[float] | None = None,
+                 check: dict | None = None):
         self.h = h
+        # The final check round: {"size": [w, h], "ok_mm": .., "targets": [{"px", "dot", "err_mm"}]}
+        self.check = check
         self.error_mm = error_mm
+        # Where the phone screen lies on the machine, mm [x0, y0, x1, y1] (found by calibration)
+        self.screen_box = screen_box
 
     @classmethod
     def from_box(cls, phone_w: float, phone_h: float, box: list[float]) -> "Calibration":
         """Stand-in for dry runs: stretch the phone image over the screen box."""
         x0, y0, x1, y1 = box
         corners = [(0, 0), (phone_w, 0), (phone_w, phone_h), (0, phone_h)]
-        return cls(fit_homography(corners, [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]))
+        return cls(fit_homography(corners, [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]), screen_box=list(box))
 
     def to_machine(self, x: float, y: float) -> tuple[float, float]:
         return apply_homography(self.h, x, y)
 
     def save(self, path: str | Path) -> None:
-        Path(path).write_text(json.dumps({"h": self.h.tolist(), "error_mm": self.error_mm}, indent=2))
+        data = {"h": self.h.tolist(), "error_mm": self.error_mm, "screen_box": self.screen_box,
+                "check": self.check}
+        Path(path).write_text(json.dumps(data, indent=2))
 
     @classmethod
     def load(cls, path: str | Path) -> "Calibration":
         data = json.loads(Path(path).read_text())
-        return cls(np.array(data["h"]), data.get("error_mm", 0.0))
+        return cls(np.array(data["h"]), data.get("error_mm", 0.0), data.get("screen_box"), data.get("check"))

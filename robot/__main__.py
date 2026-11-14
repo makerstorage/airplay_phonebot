@@ -1,8 +1,16 @@
-"""Dry-run demo: uv run python -m robot"""
+"""Gesture demo: uv run python -m robot [--machine NAME]
+Moves the real machine unless robot.dry_run is true."""
+
+import argparse
 
 from robot import Machine, load_config
 
-cfg = load_config()
+parser = argparse.ArgumentParser()
+parser.add_argument("--machine", help="machine file in machines/ (overrides robot.machine)")
+args = parser.parse_args()
+
+cfg = load_config(machine=args.machine)
+print(f"# machine {cfg.name}: {cfg.description} ({'dry run' if cfg.dry_run else cfg.port})")
 m = Machine(cfg)
 m.connect()
 print("# tap")

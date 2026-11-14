@@ -10,19 +10,37 @@ class Machine:
         self.gcode = GcodeBuilder(cfg)
         self.log: list[str] = []  # every line sent, for the UI and tests
         self._serial = None
+        # home_by_order machines: False until home() ran in this connection (connecting resets the board)
+        self.homed = not cfg.home_by_order or cfg.dry_run
 
     def connect(self) -> None:
         if not self.cfg.dry_run:
             import serial
 
             self._serial = serial.Serial(self.cfg.port, self.cfg.baud, timeout=30)
-            self._serial.reset_input_buffer()
-            if not self.cfg.home_on_start and self.position() == (0.0, 0.0, 0.0):
+            # Opening the port resets the board: lines sent while it boots are lost.
+            # Read its start-up text until it goes quiet, then talk.
+            self._serial.timeout = 4
+            while self._serial.readline():
+                pass
+            self._serial.timeout = 30
+            if (not self.cfg.home_on_start and not self.cfg.home_by_order
+                    and self.position() == (0.0, 0.0, 0.0)):
                 # Without homing, the position only lives in the board (set by hand with G92)
                 self.close()
                 raise RuntimeError("Board reports X0 Y0 Z0: it was reset and the position is lost. "
                                    "Set the stylus position by hand with G92 first.")
+        self.homed = not self.cfg.home_by_order or self.cfg.dry_run
         self.send(self.gcode.setup())
+
+    def home(self) -> None:
+        """Home X and Y (never Z). Only on the user's order."""
+        self.send([*self.gcode.home(), "M400"])
+        self.homed = True
+
+    def _need_home(self) -> None:
+        if not self.homed:
+            raise RuntimeError("The machine is not homed. Home it first (Home button on the control page).")
 
     def position(self) -> tuple[float, float, float]:
         """Current X, Y, Z from M114."""
@@ -67,23 +85,29 @@ class Machine:
     # the moves finish, so the next screenshot sees the result.
 
     def tap(self, x: float, y: float) -> None:
+        self._need_home()
         self.send([*self.gcode.tap(x, y), "M400"])
 
     def long_press(self, x: float, y: float, ms: int = 800) -> None:
+        self._need_home()
         self.send([*self.gcode.long_press(x, y, ms), "M400"])
 
     def double_tap(self, x: float, y: float) -> None:
+        self._need_home()
         self.send([*self.gcode.double_tap(x, y), "M400"])
 
     def swipe(self, x1: float, y1: float, x2: float, y2: float, speed: float | None = None) -> None:
+        self._need_home()
         self.send([*self.gcode.swipe(x1, y1, x2, y2, speed), "M400"])
 
     # Press / drag / release, for long presses and hand-made drags
 
     def press(self, x: float, y: float) -> None:
+        self._need_home()
         self.send([*self.gcode.pen_up(), *self.gcode.move(x, y), *self.gcode.pen_down(), "M400"])
 
     def drag_to(self, x: float, y: float) -> None:
+        self._need_home()
         self.send([*self.gcode.drag(x, y), "M400"])
 
     def release(self) -> None:

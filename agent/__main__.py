@@ -47,17 +47,19 @@ def print_event(kind: str, data: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("task")
+    parser.add_argument("--home", action="store_true", help="home X/Y after connecting (never Z)")
     parser.add_argument("--image", help="use a static phone screenshot instead of the mirror")
     parser.add_argument("--max-steps", type=int, help="override agent.max_steps")
+    parser.add_argument("--machine", help="machine file in machines/ (overrides robot.machine)")
     args = parser.parse_args()
 
     load_dotenv()  # ANTHROPIC_API_KEY from .env
     cfg = load_agent_config()
     if args.max_steps:
         cfg.max_steps = args.max_steps
-    robot_cfg = load_config()
+    robot_cfg = load_config(machine=args.machine)
     vision_cfg = load_vision_config()
-    calib_cfg = load_calib_config()
+    calib_cfg = load_calib_config(robot_cfg)
 
     if args.image and not robot_cfg.dry_run:
         sys.exit("--image only works with robot.dry_run: true")
@@ -68,9 +70,10 @@ def main() -> None:
         calib = Calibration.load(calib_cfg.file)
     elif robot_cfg.dry_run:
         print(f"No {calib_cfg.file}: dry run maps the screen onto screen_box.")
-        calib = Calibration.from_box(*frame.phone.size, calib_cfg.screen_box)
+        calib = Calibration.from_box(*frame.phone.size, robot_cfg.screen_box)
     else:
-        sys.exit(f"No {calib_cfg.file}. Run `uv run python -m calib` first.")
+        sys.exit(f"No {calib_cfg.file}. Calibrate first: the Calibrate button on the control page, "
+                 f"or `uv run python -m calib --home --machine {robot_cfg.name}`.")
 
     machine = Machine(robot_cfg)
     if load_actuator_mode() == "human":
@@ -83,6 +86,8 @@ def main() -> None:
         actuator = HumanActuator(lambda: frame.phone.size, on_prompt=show)
     else:
         machine.connect()
+        if args.home:
+            machine.home()
         actuator = GcodeActuator(machine, calib)
     env = PhoneEnv(capture, actuator, cfg.settle_s, cfg.stable_timeout_s)
     agent = Agent(

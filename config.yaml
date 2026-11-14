@@ -1,30 +1,7 @@
 robot:
+  machine: mks-gen13       # file in machines/ (override with --machine)
   dry_run: false           # true = print G-code only, no serial connection
-  port: /dev/cu.usbmodem21101 # serial port of the machine
-  baud: 115200
-  home_on_start: false     # never home (user rule): position is set by hand with G92
-
-  # Work area limits in mm (moves outside are refused)
-  x_max: 200
-  y_max: 200
-
-  # Z heights in mm. Z moves the bed: bigger Z = bed lower, away from the stylus.
-  # Z is never homed, so these only hold if the board resets with the stylus
-  # just touching the glass (that point = Z0), followed by G92 Z0.3.
-  z_up: 5.3                # 5 mm gap above the screen
-  z_touch: 0.0             # presses 0.3 mm past first contact (tested 2026-10-31)
-  z_at_connect: null       # G92 Z on connect; null = keep the position the board already has
-
-  # Speeds in mm/min
-  move_speed: 3000         # X/Y travel with stylus up
-  z_speed: 600             # bed up/down; 600 = firmware max (M203 Z10). Watch for skipped steps at 4388 steps/mm
-  z_accel: 150             # mm/s^2, firmware default 50 makes taps too long
-  swipe_speed: 1500        # X/Y travel with stylus down
-  fast_swipe_speed: 6000   # quick flicks, e.g. the home gesture
-
-  tap_hold_ms: 0           # no dwell: the 0.3 mm press + Z travel is enough (tested)
-  double_tap_lift: 1.0     # mm lift between the two taps of a double tap
-  dwell_in_seconds: false  # Marlin: G4 P is in ms
+  # Any machine setting set here overrides the machine file, e.g. port: /dev/cu.usbmodem1101
 
 vision:
   window_owner: uxplay          # app that owns the AirPlay mirror window (UxPlay)
@@ -32,13 +9,13 @@ vision:
   phone_width: 1170        # iPhone 13 Pro screen resolution (for the crop aspect ratio)
   phone_height: 2532
 
-calib:
+calib:                     # the machine finds the screen itself; result: calibrations/<machine>.json
   port: 8765               # calibration page: http://<mac-ip>:8765
-  screen_box: [68, 46, 132, 185]  # rough phone screen area in machine mm [x0, y0, x1, y1] (2026-10-31, frame set by G92 X100 Y100)
-  grid: 3                  # 3x3 = 9 taps
-  margin: 0.15             # keep taps away from the screen edges
+  grid: 3                  # 3x3 = 9 targets, tapped twice (learn, then check), after the search and 2 probe taps
+  margin: 0.15             # keep targets away from the page edges (and Safari's bars)
   settle_s: 1.0            # wait for the mirror to update after a tap
-  file: calib.json         # saved result
+  ok_mm: 2.0               # check round: a dot this close to its target counts as good
+  search_start: [50, 50]   # mm: first search tap when there is no saved screen box (a short first move from home)
 
 agent:
   model: claude-opus-5-5

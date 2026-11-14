@@ -1,0 +1,37 @@
+# The first bot (used until 2026-11). Settings tested on the real machine 2026-10-31.
+description: First phonebot, Marlin CoreXY, 4388 Z steps/mm
+
+port: /dev/cu.usbmodem21101   # serial port of the machine
+baud: 115200
+home_on_start: false     # never home (user rule): position is set by hand with G92
+
+# Work area limits in mm (moves outside are refused)
+x_max: 200
+y_max: 200
+screen_box: [68, 46, 132, 185]  # rough phone screen area in mm [x0, y0, x1, y1] (frame set by G92 X100 Y100)
+
+# Z heights in mm. Z moves the bed: bigger Z = bed lower, away from the stylus.
+# Z is never homed, so these only hold if the board resets with the stylus
+# just touching the glass (that point = Z0), followed by G92 Z0.3.
+z_up: 5.3                # 5 mm gap above the screen
+z_touch: 0.0             # presses 0.3 mm past first contact (tested 2026-10-31)
+z_at_connect: null       # G92 Z on connect; null = keep the position the board already has
+
+# Speeds in mm/min
+move_speed: 3000         # X/Y travel with stylus up
+z_speed: 600             # bed up/down; 600 = firmware max (M203 Z10). Watch for skipped steps at 4388 steps/mm
+z_accel: 150             # mm/s^2, firmware default 50 makes taps too long
+swipe_speed: 1500        # X/Y travel with stylus down
+fast_swipe_speed: 6000   # quick flicks, e.g. the home gesture
+
+tap_hold_ms: 0           # no dwell: the 0.3 mm press + Z travel is enough (tested)
+double_tap_lift: 1.0     # mm lift between the two taps of a double tap
+dwell_in_seconds: false  # Marlin: G4 P is in ms
+
+# Firmware build, for reference (not sent to the board)
+firmware:
+  name: Marlin
+  kinematics: corexy
+  steps_per_mm: {z: 4388}
+  max_speed_mm_s: {z: 10}
+  max_accel_mm_s2: {z: 50}
